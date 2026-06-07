@@ -1,6 +1,8 @@
 # AssedGuard AI
 > Track 01 — Data Rescue | M-AGENTS Hackathon | June 7, 2026
 
+🎬 **Demo video:** https://app.trupeer.ai/view/5U2nTdaab/asset-guard-ai-user-manual
+
 A 4-agent system that rescues corrupted manufacturing data and produces a
 signed-ready, plain-English audit narrative — operable by a compliance officer
 who has never opened a database.
@@ -55,6 +57,11 @@ CSV ─► Scout ─► Ranker ─► Fixer ─► Narrator ─► PDF
   duplicates, conflicting lot quantities, unit conflicts, statistical outliers
   (>3σ), missing timestamps, and compliance contradictions (PASS + out-of-spec
   temperature). HIGH findings are enriched with the specific regulation violated.
+  Out-of-range sensor readings are additionally scored by a **robust Bayesian
+  model (PyMC)** — a Student-T fit that resists being skewed by the outliers
+  themselves, giving each reading a calibrated anomaly probability and the
+  sensor's 95% credible normal range. It is best-effort: if PyMC is unavailable
+  the deterministic 3σ result stands, so detection never breaks.
 - **Agent 2 — Ranker** orders findings by a transparent rubric (compliance
   contradictions → traceability → measurement). Every rank has a logged
   plain-English reason. Claude peer-reviews the ordering and attaches a note.
@@ -64,8 +71,13 @@ CSV ─► Scout ─► Ranker ─► Fixer ─► Narrator ─► PDF
 - **Agent 4 — Narrator** reads the full pipeline memory and writes a 6-section
   audit narrative, rendered to a professional PDF with reportlab.
 
-**Memory layer:** Cognee is the handoff bus. If the SDK/key is unavailable it
-transparently falls back to an in-process store, so the pipeline never breaks.
+**Memory layer:** Cognee is the handoff bus — every agent writes its structured
+output and the next agent reads it before acting (see `memory/cognee_store.py`:
+`write_memory` calls `cognee.add()` when a `COGNEE_API_KEY` is configured). By
+design, if the key/SDK is unavailable the same read/write API transparently
+mirrors into an in-process store, so the handoff contract is identical and the
+pipeline never breaks during a live demo. To run against the real Cognee cloud,
+`pip install cognee` and set `COGNEE_API_KEY` in `backend/.env`.
 
 ## Mandatory tools used
 - **Cognee** — shared memory layer between all 4 agents (real read/write handoffs)
@@ -82,8 +94,8 @@ transparently falls back to an in-process store, so the pipeline never breaks.
 4. **Tangible deliverable** — a signed-ready audit narrative PDF plus a
    corrected dataset CSV.
 5. **Every decision is explainable** — every ranking and fixing action carries a
-   visible, deterministic, plain-English reason. "The model said so" appears
-   nowhere in the product.
+   visible, deterministic, plain-English reason. No decision is ever an
+   unexplained model verdict.
 
 ## Endpoints
 | Method | Path | Purpose |

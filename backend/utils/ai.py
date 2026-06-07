@@ -5,7 +5,7 @@ The entire AssedGuard pipeline is deterministic and runs fully offline. Claude
 is used ONLY to enrich human-facing text (audit context, narrative prose). Every
 call here is wrapped: if there is no API key, or the SDK/network fails, we return
 a deterministic `fallback` string and the pipeline keeps moving. This guarantees
-the demo never breaks and that no decision ever depends on "the model said so."
+the demo never breaks and that no decision ever depends on an unexplained model verdict.
 """
 import os
 

@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from memory.cognee_store import write_memory
+from utils import bayes
 from utils.ai import ask_claude
 
 OUTLIER_SIGMA = 3.0
@@ -233,22 +234,45 @@ def detect(df: pd.DataFrame, customers_df: pd.DataFrame | None = None) -> list[d
                 "Quantity cannot be verified when the unit of measure is inconsistent.")
 
     # ── DOMAIN RULE: statistical outliers (any numeric col) ──────────────
+    # Detection is deterministic (3-sigma) so it never depends on PyMC. When PyMC
+    # is available, a ROBUST Student-T model upgrades each finding with a
+    # calibrated anomaly probability and the sensor's 95% credible normal range —
+    # best-effort, falling back to the plain 3-sigma reason if anything fails.
+    use_bayes = bayes.available()
     for col in p["numeric"]:
         s = _num(df, col).dropna()
         if len(s) < 8 or s.std(ddof=0) == 0:
             continue
         mean, std = float(s.mean()), float(s.std(ddof=0))
         z = (s - mean).abs() / std
-        for i, zi in z[z > OUTLIER_SIGMA].items():
-            if (int(i), col) in flagged_cells:
-                continue
-            val = float(s.loc[i])
-            add("statistical_outlier", "MED", [i],
-                {"column": col, "value": round(val, 2), "sigma": round(float(zi), 1),
-                 "expected_range": [round(mean - OUTLIER_SIGMA * std, 1),
-                                    round(mean + OUTLIER_SIGMA * std, 1)]},
-                f"{col} value {round(val, 1)} is {round(float(zi), 1)} standard deviations from "
-                "the mean — likely a sensor fault or transcription error.",
+        candidates = [(int(i), float(zi), float(s.loc[i]))
+                      for i, zi in z[z > OUTLIER_SIGMA].items()
+                      if (int(i), col) not in flagged_cells]
+        if not candidates:
+            continue
+
+        bayes_info = bayes.analyze_column(s.values, [c[2] for c in candidates]) if use_bayes else None
+
+        for k, (i, zi, val) in enumerate(candidates):
+            rv = {"column": col, "value": round(val, 2), "sigma": round(zi, 1),
+                  "expected_range": [round(mean - OUTLIER_SIGMA * std, 1),
+                                     round(mean + OUTLIER_SIGMA * std, 1)]}
+            reason = (f"{col} value {round(val, 1)} is {round(zi, 1)} standard deviations from "
+                      "the mean — likely a sensor fault or transcription error.")
+            if bayes_info and k < len(bayes_info["anomaly_probs"]):
+                prob = bayes_info["anomaly_probs"][k]
+                rv.update(bayesian_probability=prob, method="bayesian",
+                          bayesian_model=bayes_info["model"],
+                          credible_range=[bayes_info["credible_low"], bayes_info["credible_high"]],
+                          robust_sigma=bayes_info["robust_sigma"],
+                          naive_sigma=bayes_info["naive_sigma"])
+                reason = (f"{col} reading {round(val, 1)} is rated {round(prob * 100)}% likely "
+                          f"anomalous by a robust Bayesian sensor model ({bayes_info['model']}). "
+                          f"The model places this sensor's true in-spec range at "
+                          f"{bayes_info['credible_low']}–{bayes_info['credible_high']} "
+                          f"(robust σ {bayes_info['robust_sigma']} vs naive {bayes_info['naive_sigma']}, "
+                          "which the faults themselves inflate).")
+            add("statistical_outlier", "MED", [i], rv, reason,
                 "Implausible readings suggest an uncalibrated sensor.")
 
     # ── DOMAIN RULE: missing timestamps ──────────────────────────────────

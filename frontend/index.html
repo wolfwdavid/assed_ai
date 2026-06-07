@@ -212,7 +212,7 @@
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(f.finding_id); } }}>
                       <td><span className="caret"><Icon name="chevronRight" /></span><span className="rank-badge">{f.rank}</span></td>
                       <td><span className={`badge badge-${f.severity}`}><Icon name={sev.icon} />{sev.label}</span></td>
-                      <td><div className="issue-main">{f.issue_type}</div><div className="issue-id">{f.finding_id}</div></td>
+                      <td><div className="issue-main">{f.issue_type}</div><div className="issue-id">{f.finding_id}{f.bayesian_probability != null && <span className="bayes-badge" title="PyMC robust Bayesian sensor model">PyMC {Math.round(f.bayesian_probability * 100)}%</span>}</div></td>
                       <td className="rows-cell">{f.rows_affected}</td>
                       <td><span className={`action-pill ${act.cls}`}><Icon name={act.icon} />{f.action_taken}</span></td>
                       <td className="reason-cell">{f.ranking_reason}</td>
@@ -222,6 +222,7 @@
                         <div className="detail-inner">
                           <div className="detail-grid">
                             <div className="detail-item"><span className="k">Why it matters</span><span className="v">{f.ranking_reason}</span></div>
+                            {f.bayesian_probability != null && <div className="detail-item"><span className="k">Bayesian anomaly probability</span><span className="v">{Math.round(f.bayesian_probability * 100)}% — PyMC robust Student-T model{f.credible_range && f.credible_range.length === 2 ? `, expected normal range ${f.credible_range[0]}–${f.credible_range[1]}` : ''}</span></div>}
                             {f.regulation && <div className="detail-item"><span className="k">Regulation</span><span className="v">{f.regulation}</span></div>}
                             {f.lot_numbers && f.lot_numbers.length > 0 && <div className="detail-item"><span className="k">Affected lots</span><span className="v mono">{f.lot_numbers.join(', ')}</span></div>}
                           </div>

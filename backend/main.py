@@ -116,6 +116,18 @@ RULES:
 @app.on_event("startup")
 async def startup():
     await init_cognee()
+    # Warm PyMC's compile cache in the background so the first audit run is fast.
+    try:
+        import threading
+
+        from utils import bayes
+        if bayes.available():
+            threading.Thread(target=bayes.warmup, daemon=True).start()
+            print("[bayes] PyMC available — warming compile cache in background.")
+        else:
+            print("[bayes] PyMC not installed — Scout will use deterministic 3σ outliers.")
+    except Exception as e:  # noqa: BLE001
+        print(f"[bayes] warmup skipped ({e}).")
 
 
 def _sse(payload: dict) -> str:
@@ -309,6 +321,8 @@ async def get_findings():
                                               ACTION_LABEL.get(r["issue_type"], "Reviewed")),
             "claude_note": r.get("claude_note", ""),
             "lot_numbers": r.get("lot_numbers", []),
+            "bayesian_probability": r.get("raw_values", {}).get("bayesian_probability"),
+            "credible_range": r.get("raw_values", {}).get("credible_range"),
         })
 
     stats = dict(ranker.get("stats", {"HIGH": 0, "MED": 0, "LOW": 0}))

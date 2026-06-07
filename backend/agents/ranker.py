@@ -2,7 +2,7 @@
 Agent 2 — Ranker
 Reads Scout's findings from Cognee. Prioritizes them by regulatory audit risk
 using a DETERMINISTIC rubric (every ranking has a visible, logged reason — never
-"the model said so"). Then asks Claude to peer-review the ordering and attaches
+an unexplained model verdict). Then asks Claude to peer-review the ordering and attaches
 its note alongside the original rank. Writes the ranked list back to Cognee.
 """
 from memory.cognee_store import read_memory, write_memory
@@ -47,6 +47,13 @@ def _ranking_reason(rank: int, f: dict) -> str:
                 f"({', '.join(rv.get('units', []))}) prevents quantity verification — "
                 "the auditor cannot confirm batch weight across mixed units.")
     if it == "statistical_outlier":
+        bp = rv.get("bayesian_probability")
+        if bp is not None:
+            cr = rv.get("credible_range", [])
+            cr_txt = f" (credible normal range {cr[0]}–{cr[1]})" if len(cr) == 2 else ""
+            return (f"Ranked #{rank} because a robust Bayesian model (PyMC) rates "
+                    f"{rv.get('column','this reading')} = {rv.get('value','?')} as "
+                    f"{round(bp * 100)}% likely anomalous{cr_txt} — verify the sensor calibration.")
         return (f"Ranked #{rank} because {rv.get('column','a reading')} = "
                 f"{rv.get('value','?')} sits {rv.get('sigma','?')}σ outside the "
                 "expected range, signalling a possible sensor fault to verify.")

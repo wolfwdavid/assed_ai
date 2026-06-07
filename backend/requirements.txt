@@ -4,9 +4,13 @@ python-multipart==0.0.9
 anthropic==0.34.0
 cognee==0.1.35
 pandas==2.2.2
-numpy==1.26.4
+numpy==2.4.6
 reportlab==4.2.2
 python-dotenv==1.0.1
 sse-starlette==2.1.2
 aiofiles==23.2.1
 requests==2.32.3
+# Bayesian sensor-anomaly analysis (Scout outlier scoring). Optional at runtime:
+# Scout falls back to deterministic 3-sigma if these are absent.
+pymc==5.28.5
+scipy==1.17.1
