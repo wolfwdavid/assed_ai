@@ -28,7 +28,13 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const API = 'http://localhost:8000';
+    // Backend base URL. Override with ?api=https://your-backend  (persisted), else localhost.
+    const API = (() => {
+      const q = new URLSearchParams(location.search).get('api');
+      if (q) { try { localStorage.setItem('ag-api', q); } catch (e) {} return q.replace(/\/$/, ''); }
+      try { return (localStorage.getItem('ag-api') || 'http://localhost:8000').replace(/\/$/, ''); }
+      catch (e) { return 'http://localhost:8000'; }
+    })();
 
     /* ── Inline SVG icon set (no emoji) ── */
     const ICONS = {
