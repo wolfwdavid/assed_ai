@@ -79,6 +79,8 @@ RISK_WEIGHTS = {"impossible_value": 22, "compliance_contradiction": 25,
                 "exact_duplicate": 10, "near_duplicate_variant": 8, "unit_conflict": 8,
                 "unit_format_drift": 6, "statistical_outlier": 5, "missing_timestamp": 3}
 GEO_MULT = {"CRITICAL": 1.3, "HIGH": 1.15, "MEDIUM": 1.05, "LOW": 1.0}
+# Geodo regulatory exposure adds a small additive nudge (keeps density ordering).
+GEO_BONUS = {"CRITICAL": 8, "HIGH": 4, "MEDIUM": 2, "LOW": 0}
 
 CHAT_SYSTEM_PROMPT = """You are the AssedGuard AI compliance advisor for a
 manufacturing company preparing for an FDA audit. You have just completed a full
@@ -317,32 +319,49 @@ async def get_findings():
     return {"findings": findings, "stats": stats}
 
 
+SEV_WEIGHT = {"HIGH": 1.0, "MED": 0.45, "LOW": 0.2}
+SEV_FLOOR = {"HIGH": 70, "MED": 35, "LOW": 10}
+SEV_RANK = {"HIGH": 0, "MED": 1, "LOW": 2}
+
+
 @app.get("/risk-score")
 async def get_risk_score():
-    """Deterministic weighted 0–100 audit risk score, Geodo-multiplied."""
+    """Severity-weighted DENSITY score (0–100): how widespread + how severe the
+    data-integrity problems are, relative to the dataset size. A floor by worst
+    severity keeps any critical finding visible; density above the floor reflects
+    how much of the dataset is actually affected, so the score is gradated rather
+    than pegged at 100. Nudged by Geodo regulatory exposure."""
     scout = await read_memory("scout") or {}
     counsel = await read_memory("counsel") or {}
     findings = scout.get("findings", [])
+    total_rows = max(1, scout.get("summary", {}).get("rows_scanned", 0) or len(findings))
 
-    counts = {}
+    if not findings:
+        return {"score": 0, "level": "LOW", "color": "#059669", "breakdown": [],
+                "geodo_multiplier": 1.0,
+                "plain_english": ("Your dataset carries a LOW audit risk score of 0/100. No "
+                                  "data-integrity issues were detected; it is ready for audit review.")}
+
+    # Aggregate per issue type: findings count, affected rows, severity-weighted load.
+    agg, affected = {}, set()
+    worst = "LOW"
     for f in findings:
-        counts[f["issue_type"]] = counts.get(f["issue_type"], 0) + 1
+        rows = f.get("row_ids", [])
+        sev = f.get("severity", "MED")
+        if SEV_RANK.get(sev, 9) < SEV_RANK.get(worst, 9):
+            worst = sev
+        affected.update(rows)
+        a = agg.setdefault(f["issue_type"], {"count": 0, "rows": 0, "weighted": 0.0})
+        a["count"] += 1
+        a["rows"] += len(rows)
+        a["weighted"] += SEV_WEIGHT.get(sev, 0.3) * len(rows)
 
-    breakdown, base = [], 0
-    for it, w in RISK_WEIGHTS.items():
-        c = counts.get(it, 0)
-        if c:
-            tot = c * w
-            base += tot
-            breakdown.append({"issue_type": ISSUE_LABEL[it], "count": c,
-                              "pts_each": w, "total_pts": tot})
-
-    # Show the biggest contributors first.
-    breakdown.sort(key=lambda b: b["total_pts"], reverse=True)
-
-    mult = GEO_MULT.get(counsel.get("overall_regulatory_exposure", "LOW"), 1.0)
-    raw = round(base * mult)
-    score = max(0, min(100, raw))
+    weighted_rows = sum(a["weighted"] for a in agg.values())
+    density = min(1.0, weighted_rows / total_rows)          # severity-weighted share of rows
+    floor = SEV_FLOOR.get(worst, 0)
+    base = floor + (100 - floor) * density                 # floor + how widespread
+    bonus = GEO_BONUS.get(counsel.get("overall_regulatory_exposure", "LOW"), 0)
+    score = max(0, min(100, round(base) + bonus))
 
     if score >= 90:
         level, color = "CRITICAL", "#DC2626"
@@ -353,20 +372,25 @@ async def get_risk_score():
     else:
         level, color = "LOW", "#059669"
 
-    if findings and breakdown:
-        d = breakdown[0]                                   # biggest contributor by points
-        plural = "s" if d["count"] != 1 else ""
-        verb = "is" if d["count"] == 1 else "are"
-        capped = " (risk exceeded the 100-point ceiling)" if raw > 100 else ""
-        plain = (f"Your dataset carries a {level} audit risk score of {score}/100{capped}. "
-                 f"The {d['count']} {d['issue_type'].lower()}{plural} {verb} the primary driver. "
-                 "Resolve the critical items before your FDA audit.")
-    else:
-        plain = ("Your dataset carries a LOW audit risk score of 0/100. No data-integrity "
-                 "issues were detected; it is ready for audit review.")
+    # Drivers: each type's share of the score (sums ≈ score).
+    breakdown = []
+    for it, a in agg.items():
+        share = round((a["weighted"] / weighted_rows) * score) if weighted_rows else 0
+        breakdown.append({"issue_type": ISSUE_LABEL.get(it, it), "count": a["count"],
+                          "rows": a["rows"], "total_pts": share})
+    breakdown.sort(key=lambda b: b["total_pts"], reverse=True)
+
+    pct = round(len(affected) / total_rows * 100, 1)
+    d = breakdown[0]
+    plural = "s" if d["count"] != 1 else ""
+    verb = "is" if d["count"] == 1 else "are"
+    plain = (f"Your dataset carries a {level} audit risk score of {score}/100 — integrity issues "
+             f"affect about {pct}% of your {total_rows} records. The {d['count']} "
+             f"{d['issue_type'].lower()}{plural} {verb} the primary driver. Resolve the critical "
+             "items before your FDA audit.")
 
     return {"score": score, "level": level, "color": color, "breakdown": breakdown,
-            "geodo_multiplier": mult, "plain_english": plain}
+            "geodo_bonus": bonus, "affected_pct": pct, "plain_english": plain}
 
 
 @app.get("/action-checklist")

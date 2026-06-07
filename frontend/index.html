@@ -171,6 +171,11 @@
       const onSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
       const valueFor = (f, key) => key === 'severity' ? SEV_ORDER[f.severity] : key === 'rows' ? f.rows_affected : f.rank;
       const rows = [...findings].sort((a, b) => { const d = valueFor(a, sort.key) - valueFor(b, sort.key); return sort.dir === 'asc' ? d : -d; });
+      const STEP = 10;
+      const [limit, setLimit] = React.useState(STEP);
+      React.useEffect(() => { setLimit(STEP); }, [findings]);   // reset when a new audit runs
+      const visible = rows.slice(0, limit);
+      const remaining = rows.length - visible.length;
       const ariaSort = (key) => sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
       const Th = ({ k, children }) => (
         <th className="sortable" aria-sort={ariaSort(k)} onClick={() => onSort(k)} tabIndex={0} scope="col"
@@ -187,7 +192,7 @@
               <th scope="col">Action taken</th><th scope="col">Reason</th>
             </tr></thead>
             <tbody>
-              {rows.map(f => {
+              {visible.map(f => {
                 const sev = SEV[f.severity] || SEV.LOW;
                 const act = classifyAction(f.action_taken);
                 const isOpen = !!open[f.finding_id];
@@ -223,6 +228,17 @@
               })}
             </tbody>
           </table>
+          {rows.length > STEP && (
+            <div className="findings-more">
+              <span className="findings-count">Showing {visible.length} of {rows.length} findings</span>
+              {remaining > 0
+                ? <button className="more-btn" onClick={() => setLimit(l => l + STEP)}>
+                    Show {Math.min(STEP, remaining)} more<Icon name="chevronRight" size={14} />
+                  </button>
+                : <button className="more-btn" onClick={() => setLimit(STEP)}>Show fewer</button>}
+              {remaining > STEP && <button className="more-btn ghost" onClick={() => setLimit(rows.length)}>Show all {rows.length}</button>}
+            </div>
+          )}
         </div>
       );
     }
@@ -686,13 +702,6 @@
               <section className="section">
                 <div className="section-head"><span className="section-label"><Icon name="diff" />Data rescue — before / after</span></div>
                 <DataDiff data={dataDiff} />
-              </section>
-            )}
-
-            {pipelineStatus === 'complete' && (
-              <section className="section">
-                <div className="section-head"><span className="section-label"><Icon name="bot" />Ask your audit AI</span></div>
-                <ChatPanel />
               </section>
             )}
 
