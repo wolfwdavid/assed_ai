@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssedGuard AI — Data Integrity Review</title>
+  <meta name="description" content="Scan, rank, and rescue corrupted manufacturing data into a signed-ready audit narrative.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="styles.css" rel="stylesheet">
+  <script>
+    /* Anti-flash: set theme before first paint */
+    (function () {
+      try {
+        var t = localStorage.getItem('ag-theme');
+        if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+  <div class="aurora" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const API = 'http://localhost:8000';
+
+    /* ── Inline SVG icon set (no emoji) ── */
+    const ICONS = {
+      shield: <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></>,
+      upload: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></>,
+      file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></>,
+      search: <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
+      ranker: <><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h5"/><path d="m17 14 3 3-3 3"/></>,
+      wrench: <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.83 2.83a1 1 0 0 1-1.41 0l-1.59-1.59a1 1 0 0 1 0-1.41z"/>,
+      narrator: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></>,
+      check: <path d="M20 6 9 17l-5-5"/>,
+      checkCircle: <><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></>,
+      circle: <circle cx="12" cy="12" r="8.5"/>,
+      xCircle: <><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></>,
+      triangle: <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></>,
+      alertCircle: <><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></>,
+      info: <><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></>,
+      flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></>,
+      escalate: <><path d="m12 3 9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></>,
+      download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></>,
+      table: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></>,
+      chevronRight: <path d="m9 18 6-6-6-6"/>,
+      sort: <><path d="m8 9 4-4 4 4"/><path d="m16 15-4 4-4-4"/></>,
+      sparkle: <path d="M12 3l1.6 4.8a2 2 0 0 0 1.6 1.6L20 11l-4.8 1.6a2 2 0 0 0-1.6 1.6L12 19l-1.6-4.8a2 2 0 0 0-1.6-1.6L4 11l4.8-1.6a2 2 0 0 0 1.6-1.6z"/>,
+      lock: <><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></>,
+      activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>,
+      gauge: <><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></>,
+      sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>,
+      moon: <path d="M12 3a6.36 6.36 0 0 0 9 9 9 9 0 1 1-9-9z"/>,
+      zap: <path d="M13 2 3 14h9l-1 8 10-12h-9z"/>,
+      clipboard: <><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h4"/></>,
+      bot: <><rect x="4" y="9" width="16" height="11" rx="3"/><path d="M12 9V5.5"/><circle cx="12" cy="4" r="1.4"/><path d="M9 14h.01"/><path d="M15 14h.01"/></>,
+      send: <><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></>,
+      diff: <><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></>,
+    };
+    function Icon({ name, size = 20, cls }) {
+      return (
+        <svg className={cls} width={size} height={size} viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+             aria-hidden="true" focusable="false">{ICONS[name]}</svg>
+      );
+    }
+
+    const SEV = {
+      HIGH: { label: 'Critical', icon: 'triangle' },
+      MED:  { label: 'Moderate', icon: 'alertCircle' },
+      LOW:  { label: 'Minor', icon: 'info' },
+    };
+    const SEV_ORDER = { HIGH: 0, MED: 1, LOW: 2 };
+
+    function classifyAction(text) {
+      const t = (text || '').toLowerCase();
+      if (t.includes('escalat')) return { cls: 'action-esc', icon: 'escalate' };
+      if (t.includes('verify') || t.includes('flag')) return { cls: 'action-flag', icon: 'flag' };
+      return { cls: 'action-fix', icon: 'check' };
+    }
+
+    /* ── Theme toggle ── */
+    function ThemeToggle({ theme, onToggle }) {
+      const dark = theme === 'dark';
+      return (
+        <button className="theme-toggle" onClick={onToggle}
+                aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-pressed={dark} title={dark ? 'Light mode' : 'Dark mode'}>
+          <Icon name={dark ? 'sun' : 'moon'} size={19} />
+        </button>
+      );
+    }
+
+    /* ── Pipeline card ── */
+    const AGENT_GLYPH = { scout: 'search', ranker: 'ranker', fixer: 'wrench', narrator: 'narrator', counsel: 'shield' };
+    function AgentCard({ index, agentKey, name, description, status, summary }) {
+      const statusIcon = {
+        idle: <Icon name="circle" />,
+        running: <span className="spinner" role="status" aria-label="Working" />,
+        complete: <Icon name="checkCircle" cls="check-anim" />,
+        error: <Icon name="xCircle" />,
+      }[status];
+      const statusText = { idle: 'Waiting', running: 'Working', complete: 'Complete', error: 'Error' }[status];
+
+      let summaryLine = null;
+      if (status === 'complete' && summary) {
+        if (summary.total !== undefined) summaryLine = `${summary.total} issues detected`;
+        else if (summary.fixed !== undefined) summaryLine = `${summary.fixed} fixed · ${summary.flagged} flagged · ${summary.escalated} escalated`;
+        else if (summary.HIGH !== undefined) summaryLine = `${summary.HIGH} critical prioritised first`;
+        else if (summary.chars !== undefined) summaryLine = 'Narrative drafted';
+        else if (summary.exposure !== undefined) summaryLine = `${summary.facilities_researched} facilities · ${summary.exposure} exposure`;
+      }
+
+      return (
+        <div className={`agent-card ${status}`}>
+          <div className="agent-top">
+            <span className="agent-step">STEP {index}/4</span>
+            <span className="agent-statusicon">{statusIcon}</span>
+          </div>
+          <div className="agent-glyph"><Icon name={AGENT_GLYPH[agentKey]} /></div>
+          <div className="agent-name">{name}</div>
+          <div className="agent-desc">{description}</div>
+          <div className={`agent-status-text ${status}`}>{statusText}</div>
+          {summaryLine && <div className="agent-summary">{summaryLine}</div>}
+        </div>
+      );
+    }
+
+    /* ── Risk verdict banner ── */
+    function Verdict({ stats }) {
+      const high = stats.HIGH || 0, med = stats.MED || 0;
+      const level = high > 0 ? 'high' : med > 0 ? 'med' : 'low';
+      const title = { high: 'Audit risk: High', med: 'Audit risk: Moderate', low: 'Audit risk: Low' }[level];
+      const icon  = { high: 'triangle', med: 'alertCircle', low: 'shield' }[level];
+      const msg = high > 0
+        ? `${high} critical ${high === 1 ? 'issue' : 'issues'} must be resolved before this dataset is submitted to an auditor.`
+        : med > 0
+          ? `No critical issues. ${med} moderate ${med === 1 ? 'item needs' : 'items need'} verification before submission.`
+          : 'No critical or moderate issues detected — this dataset is in good standing.';
+      return (
+        <div className={`verdict ${level}`} role="status">
+          <span className="verdict-icon"><Icon name={icon} size={26} /></span>
+          <div className="verdict-text"><h2>{title}</h2><p>{msg}</p></div>
+        </div>
+      );
+    }
+
+    /* ── Clean dataset success state ── */
+    function EmptyFindings() {
+      return (
+        <div className="empty-state" role="status">
+          <span className="empty-ring"><Icon name="check" size={40} /></span>
+          <h2>Dataset clean. No audit issues found.</h2>
+          <p>This dataset passed all validation checks with zero issues — it is ready for audit review.</p>
+        </div>
+      );
+    }
+
+    /* ── Findings table ── */
+    function FindingsTable({ findings }) {
+      const [open, setOpen] = React.useState({});
+      const [sort, setSort] = React.useState({ key: 'rank', dir: 'asc' });
+      const toggle = (id) => setOpen(p => ({ ...p, [id]: !p[id] }));
+      const onSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+      const valueFor = (f, key) => key === 'severity' ? SEV_ORDER[f.severity] : key === 'rows' ? f.rows_affected : f.rank;
+      const rows = [...findings].sort((a, b) => { const d = valueFor(a, sort.key) - valueFor(b, sort.key); return sort.dir === 'asc' ? d : -d; });
+      const ariaSort = (key) => sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+      const Th = ({ k, children }) => (
+        <th className="sortable" aria-sort={ariaSort(k)} onClick={() => onSort(k)} tabIndex={0} scope="col"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSort(k); } }}>
+          {children}<span className="sort-ind"><Icon name="sort" /></span>
+        </th>
+      );
+      return (
+        <div className="table-wrap">
+          <table className="findings-table">
+            <thead><tr>
+              <Th k="rank">Rank</Th><Th k="severity">Severity</Th>
+              <th scope="col">Issue</th><Th k="rows">Rows</Th>
+              <th scope="col">Action taken</th><th scope="col">Reason</th>
+            </tr></thead>
+            <tbody>
+              {rows.map(f => {
+                const sev = SEV[f.severity] || SEV.LOW;
+                const act = classifyAction(f.action_taken);
+                const isOpen = !!open[f.finding_id];
+                const detailId = `detail-${f.finding_id}`;
+                return (
+                  <React.Fragment key={f.finding_id}>
+                    <tr className={`frow ${f.severity === 'HIGH' ? 'high' : ''} ${isOpen ? 'open' : ''}`}
+                        data-finding={f.finding_id}
+                        tabIndex={0} role="button" aria-expanded={isOpen} aria-controls={detailId}
+                        onClick={() => toggle(f.finding_id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(f.finding_id); } }}>
+                      <td><span className="caret"><Icon name="chevronRight" /></span><span className="rank-badge">{f.rank}</span></td>
+                      <td><span className={`badge badge-${f.severity}`}><Icon name={sev.icon} />{sev.label}</span></td>
+                      <td><div className="issue-main">{f.issue_type}</div><div className="issue-id">{f.finding_id}</div></td>
+                      <td className="rows-cell">{f.rows_affected}</td>
+                      <td><span className={`action-pill ${act.cls}`}><Icon name={act.icon} />{f.action_taken}</span></td>
+                      <td className="reason-cell">{f.ranking_reason}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="detail-row" id={detailId}><td colSpan="6">
+                        <div className="detail-inner">
+                          <div className="detail-grid">
+                            <div className="detail-item"><span className="k">Why it matters</span><span className="v">{f.ranking_reason}</span></div>
+                            {f.regulation && <div className="detail-item"><span className="k">Regulation</span><span className="v">{f.regulation}</span></div>}
+                            {f.lot_numbers && f.lot_numbers.length > 0 && <div className="detail-item"><span className="k">Affected lots</span><span className="v mono">{f.lot_numbers.join(', ')}</span></div>}
+                          </div>
+                          {f.claude_note && <div className="claude-note"><Icon name="sparkle" /><span><span className="lbl">Claude review note — </span>{f.claude_note}</span></div>}
+                        </div>
+                      </td></tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    /* ── Upload zone (drag-drop + one-click sample) ── */
+    function UploadZone({ onUpload, onCustomers, onError, disabled }) {
+      const [dragging, setDragging] = React.useState(false);
+      const [filename, setFilename] = React.useState(null);
+      const [custName, setCustName] = React.useState(null);
+      const inputRef = React.useRef();
+      const custRef = React.useRef();
+      const handleFile = (file) => { if (!file) return; setFilename(file.name); onUpload(file); };
+      const openDialog = () => { if (!disabled) inputRef.current.click(); };
+      const pickCustomers = (e) => { e.stopPropagation(); if (!disabled) custRef.current.click(); };
+      const onCustChange = (e) => { const f = e.target.files[0]; if (f) { setCustName(f.name); onCustomers(f); } };
+
+      async function runSample(e) {
+        e.stopPropagation();
+        if (disabled) return;
+        try {
+          const r = await fetch(`${API}/sample`);
+          if (!r.ok) throw new Error('no sample');
+          const blob = await r.blob();
+          setFilename('sample.csv');
+          onUpload(new File([blob], 'sample.csv', { type: 'text/csv' }));
+        } catch (err) { onError && onError('Could not load the sample dataset. Make sure the backend is running on port 8000.'); }
+      }
+
+      return (
+        <div className={`upload-zone ${dragging ? 'dragging' : ''} ${disabled ? 'disabled' : ''}`}
+             role="button" tabIndex={disabled ? -1 : 0} aria-disabled={disabled}
+             aria-label="Upload a manufacturing CSV file to begin the audit"
+             onClick={openDialog}
+             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDialog(); } }}
+             onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragging(true); }}
+             onDragLeave={() => setDragging(false)}
+             onDrop={(e) => { e.preventDefault(); setDragging(false); if (!disabled) handleFile(e.dataTransfer.files[0]); }}>
+          <span className="upload-illu"><Icon name="upload" size={30} /></span>
+          <div className="upload-title">Drag your manufacturing dataset here</div>
+          <div className="upload-hint">The audit begins automatically once a file is added</div>
+          <div className="upload-actions">
+            <button type="button" className="btn-primary"
+                    onClick={(e) => { e.stopPropagation(); openDialog(); }}>
+              <Icon name="file" size={17} />Browse files
+            </button>
+            <button type="button" className="btn-ghost" onClick={runSample}>
+              <Icon name="zap" size={17} />Run sample dataset
+            </button>
+          </div>
+          {filename
+            ? <div className="upload-chip"><Icon name="check" />Loaded <span className="fname">{filename}</span></div>
+            : <div className="upload-formats">Supported format: .CSV · processed locally on your machine</div>}
+          <div className="upload-lookup">
+            <button type="button" className="lookup-btn" onClick={pickCustomers}>
+              <Icon name="table" size={14} />{custName ? 'Customer lookup added' : 'Add customer lookup table (optional)'}
+            </button>
+            {custName && <span className="lookup-name mono">{custName}</span>}
+          </div>
+          <input ref={inputRef} type="file" accept=".csv" className="upload-input" tabIndex={-1}
+                 onChange={(e) => handleFile(e.target.files[0])} />
+          <input ref={custRef} type="file" accept=".csv" className="upload-input" tabIndex={-1}
+                 onChange={onCustChange} />
+        </div>
+      );
+    }
+
+    /* ── Main app ── */
+    const AGENTS = [
+      { key: 'scout',    name: 'Scout',    desc: 'Reads every row and detects data-integrity issues' },
+      { key: 'ranker',   name: 'Ranker',   desc: 'Prioritises each issue by regulatory audit risk' },
+      { key: 'fixer',    name: 'Fixer',    desc: 'Corrects, flags, or escalates — with a logged reason' },
+      { key: 'narrator', name: 'Narrator', desc: 'Writes the signed-ready audit narrative' },
+      { key: 'counsel',  name: 'Counsel',  desc: 'Researches regulatory exposure via Geodo' },
+    ];
+
+    /* Scroll to + flash a finding row (used by chat refs and checklist chips) */
+    function scrollToFinding(id) {
+      const el = document.querySelector(`[data-finding="${id}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1800);
+    }
+
+    /* ── RISK GAUGE (Ext 2) ── */
+    function RiskGauge({ data }) {
+      const { score, level, color, breakdown, plain_english } = data;
+      const [shown, setShown] = React.useState(0);
+      React.useEffect(() => { const t = setTimeout(() => setShown(score), 120); return () => clearTimeout(t); }, [score]);
+      const R = 130, CIRC = Math.PI * R;
+      const angle = (shown / 100) * 180 - 90;
+      const dash = (shown / 100) * CIRC;
+      return (
+        <div className="gauge-card">
+          <div className="gauge-main">
+            <div className="gauge-svg-wrap">
+              <svg width="300" height="172" viewBox="0 0 300 172" aria-hidden="true">
+                <path d="M20 150 A130 130 0 0 1 280 150" fill="none" stroke="var(--surface-3)" strokeWidth="16" strokeLinecap="round" />
+                <path d="M20 150 A130 130 0 0 1 280 150" fill="none" stroke={color} strokeWidth="16" strokeLinecap="round"
+                      strokeDasharray={`${dash} ${CIRC}`} style={{ transition: 'stroke-dasharray 1.2s cubic-bezier(0.23,1,0.32,1)' }} />
+                <g className="gauge-needle" style={{ transform: `rotate(${angle}deg)` }}>
+                  <line x1="150" y1="150" x2="150" y2="44" stroke={color} strokeWidth="3.5" strokeLinecap="round" />
+                </g>
+                <circle cx="150" cy="150" r="9" fill={color} />
+                <circle cx="150" cy="150" r="4" fill="var(--surface)" />
+              </svg>
+              <div className="gauge-center">
+                <div className="gauge-score" style={{ color }}>{score}</div>
+                <span className="gauge-level" style={{ background: color }}>{level}</span>
+              </div>
+            </div>
+            <p className="gauge-plain">{plain_english}</p>
+          </div>
+          <div>
+            <div className="gauge-bd-title">Score drivers</div>
+            <div className="gauge-breakdown">
+              {breakdown.length === 0 && <div className="breakdown-row"><span className="lbl">No issues detected</span><span className="breakdown-pts">0</span></div>}
+              {breakdown.map((b, i) => (
+                <div className="breakdown-row" key={i}>
+                  <span className="lbl">{b.issue_type} ×{b.count}</span>
+                  <span className="breakdown-pts">+{b.total_pts}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── ACTION CHECKLIST (Ext 4) ── */
+    const PRIORITY_CLASS = { 'BEFORE AUDIT': 'before', 'SAME DAY': 'same-day', 'THIS WEEK': 'this-week' };
+    function ActionChecklist({ items }) {
+      const [done, setDone] = React.useState({});
+      const toggle = (n) => setDone(p => ({ ...p, [n]: !p[n] }));
+      const total = items.length;
+      const completed = items.filter(i => done[i.item_number]).length;
+      const pct = total ? (completed / total) * 100 : 0;
+      const allDone = total > 0 && completed === total;
+      return (
+        <div className="checklist-card">
+          <div className="checklist-progress"><div className="checklist-progress-fill" style={{ width: `${pct}%` }} /></div>
+          <div className="checklist-progress-label">{completed} of {total} items completed{allDone ? ' — ready to submit' : ''}</div>
+          {items.map(it => (
+            <div className={`checklist-item ${done[it.item_number] ? 'done' : ''}`} key={it.item_number}>
+              <div className={`item-check ${done[it.item_number] ? 'checked' : ''}`} role="checkbox" aria-checked={!!done[it.item_number]} tabIndex={0}
+                   onClick={() => toggle(it.item_number)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(it.item_number); } }}>
+                {done[it.item_number] && <Icon name="check" size={14} />}
+              </div>
+              <div className="item-body">
+                <div className="item-action">{it.action}</div>
+                <div className="item-meta">
+                  <span className={`priority-badge ${PRIORITY_CLASS[it.priority] || 'this-week'}`}>{it.priority}</span>
+                  <span className="owner-chip">{it.owner}</span>
+                  <span className="finding-chip" onClick={() => scrollToFinding(it.finding_id)}>{it.finding_id}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {allDone && <div className="all-done-banner"><Icon name="checkCircle" size={18} />All pre-audit actions completed. Your dataset is ready for submission.</div>}
+        </div>
+      );
+    }
+
+    /* ── DATA DIFF (Ext 5) ── */
+    const DIFF_ROW_CLASS = { removed: 'row-removed', modified: 'row-modified', flagged: 'row-flagged' };
+    function DataDiff({ data }) {
+      const [open, setOpen] = React.useState(false);
+      const [showAll, setShowAll] = React.useState(false);
+      const rows = data.changed_rows || [];
+      const shown = showAll ? rows : rows.slice(0, 30);
+      return (
+        <div className={`diff-card ${open ? 'open' : ''}`}>
+          <div className="diff-header" role="button" tabIndex={0} aria-expanded={open}
+               onClick={() => setOpen(o => !o)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); } }}>
+            <span className="diff-title"><span className="caret"><Icon name="chevronRight" /></span><Icon name="diff" size={17} />Data changes applied</span>
+            <span className="diff-chips">
+              <span className="diff-chip removed">{data.rows_removed} removed</span>
+              <span className="diff-chip modified">{data.rows_modified} modified</span>
+              <span className="diff-chip flagged">{data.rows_flagged} flagged</span>
+            </span>
+          </div>
+          {open && (
+            <div className="diff-body">
+              <table className="diff-table">
+                <thead><tr><th>Row</th><th>Lot</th><th>Change</th><th>Column</th><th>Before</th><th>After</th><th>Finding</th></tr></thead>
+                <tbody>
+                  {shown.map((r, i) => r.changes.map((c, j) => (
+                    <tr className={DIFF_ROW_CLASS[r.action_type]} key={`${i}-${j}`}>
+                      <td>{r.row_index}</td>
+                      <td className="mono">{r.lot_number}</td>
+                      <td style={{ textTransform: 'capitalize' }}>{r.action_type}</td>
+                      <td>{c.column}</td>
+                      <td><span className={r.action_type === 'removed' ? 'before-val' : ''}>{c.before}</span></td>
+                      <td><span className="after-val">{c.after}</span></td>
+                      <td className="fid-cell">{r.finding_id || '—'}</td>
+                    </tr>
+                  )))}
+                </tbody>
+              </table>
+              {!showAll && rows.length > 30 && <div className="diff-more"><button onClick={() => setShowAll(true)}>Show all {rows.length} changes</button></div>}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ── CHAT PANEL (Ext 3) ── */
+    const SUGGESTIONS = [
+      'Can I submit this to my auditor tomorrow?',
+      "What's the single most urgent thing to fix?",
+      'Which auto-corrections do I need to verify?',
+      'Explain the compliance contradictions in plain English',
+    ];
+    function renderReply(text) {
+      return text.split(/(F\d{3})/g).map((p, i) =>
+        /^F\d{3}$/.test(p)
+          ? <span className="chat-finding-ref" key={i} onClick={() => scrollToFinding(p)}>{p}</span>
+          : <React.Fragment key={i}>{p}</React.Fragment>);
+    }
+    function ChatPanel() {
+      const [messages, setMessages] = React.useState([]);
+      const [input, setInput] = React.useState('');
+      const [loading, setLoading] = React.useState(false);
+      const scrollRef = React.useRef();
+      React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, loading]);
+      async function send(text) {
+        const msg = (typeof text === 'string' ? text : input).trim();
+        if (!msg || loading) return;
+        const history = messages.map(m => ({ role: m.role, content: m.content }));
+        setMessages(m => [...m, { role: 'user', content: msg }]);
+        setInput(''); setLoading(true);
+        try {
+          const r = await fetch(`${API}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, history }) });
+          const d = await r.json();
+          setMessages(m => [...m, { role: 'assistant', content: d.reply }]);
+        } catch (e) {
+          setMessages(m => [...m, { role: 'assistant', content: 'Sorry — I could not reach the audit service. Make sure the backend is running on port 8000.' }]);
+        } finally { setLoading(false); }
+      }
+      return (
+        <div className="chat-card">
+          <div className="chat-header">
+            <span className="chat-bot"><Icon name="bot" /></span>
+            <div><div className="chat-title">Ask Your Audit AI</div><div className="chat-sub">Ask anything about your specific dataset and findings</div></div>
+          </div>
+          <div className="chat-messages" ref={scrollRef}>
+            {messages.length === 0 && <div className="chat-empty">No questions yet — try a suggestion below.</div>}
+            {messages.map((m, i) => (
+              <div className={`chat-msg ${m.role === 'user' ? 'user' : 'ai'}`} key={i}>{m.role === 'assistant' ? renderReply(m.content) : m.content}</div>
+            ))}
+            {loading && <div className="chat-msg ai"><div className="chat-typing"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div></div>}
+          </div>
+          {messages.length === 0 && (
+            <div className="chat-suggestions">
+              {SUGGESTIONS.map((s, i) => <span className="chat-suggestion" key={i} onClick={() => send(s)}>{s}</span>)}
+            </div>
+          )}
+          <div className="chat-input-row">
+            <input className="chat-input" value={input} placeholder="Ask about a lot, the most urgent fix, or if you can submit…"
+                   disabled={loading} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send(); }} />
+            <button className="chat-send-btn" onClick={() => send()} disabled={loading || !input.trim()}><Icon name="send" size={15} />Ask</button>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [theme, setTheme] = React.useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+      const [agentStatuses, setAgentStatuses] = React.useState({ scout: 'idle', ranker: 'idle', fixer: 'idle', narrator: 'idle', counsel: 'idle' });
+      const [agentSummaries, setAgentSummaries] = React.useState({});
+      const [findings, setFindings] = React.useState([]);
+      const [pipelineStatus, setPipelineStatus] = React.useState('idle');
+      const [pdfReady, setPdfReady] = React.useState(false);
+      const [stats, setStats] = React.useState(null);
+      const [error, setError] = React.useState(null);
+      const [live, setLive] = React.useState('');
+      const [riskScore, setRiskScore] = React.useState(null);
+      const [checklist, setChecklist] = React.useState(null);
+      const [dataDiff, setDataDiff] = React.useState(null);
+      const [customersFile, setCustomersFile] = React.useState(null);
+
+      React.useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        try { localStorage.setItem('ag-theme', theme); } catch (e) {}
+      }, [theme]);
+      const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+
+      const completedCount = Object.values(agentStatuses).filter(s => s === 'complete').length;
+
+      // Only count REAL findings: rows_affected > 0 and an actual action taken.
+      // Guards against any "no action required" / zero-row placeholder finding.
+      const realFindings = (findings || []).filter(
+        f => f.rows_affected > 0 && String(f.action_taken || '').toLowerCase() !== 'no action required'
+      );
+      const sevCount = (s) => realFindings.filter(f => f.severity === s).length;
+      const needsReview = realFindings.filter(f => /flag|escalat|verify/i.test(f.action_taken || '')).length;
+      const autoCorrected = (stats && stats.auto_fixed) || 0;
+
+      async function handleUpload(file) {
+        setError(null); setPipelineStatus('running'); setPdfReady(false);
+        setFindings([]); setStats(null); setAgentSummaries({});
+        setRiskScore(null); setChecklist(null); setDataDiff(null);
+        setAgentStatuses({ scout: 'idle', ranker: 'idle', fixer: 'idle', narrator: 'idle', counsel: 'idle' });
+        setLive('Audit started. Scanning your dataset.');
+        const formData = new FormData();
+        formData.append('file', file);
+        if (customersFile) formData.append('customers', customersFile);
+        let response;
+        try {
+          response = await fetch(`${API}/run-audit`, { method: 'POST', body: formData });
+        } catch (e) {
+          setError('Could not reach the AssedGuard service. Make sure the backend is running on port 8000.');
+          setPipelineStatus('error'); return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
+          for (const part of parts) {
+            const line = part.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            let event; try { event = JSON.parse(line.slice(6)); } catch { continue; }
+            await handleEvent(event);
+          }
+        }
+      }
+
+      async function handleEvent(event) {
+        if (event.agent === 'pipeline') {
+          if (event.status === 'complete') {
+            setPipelineStatus('complete'); setPdfReady(true);
+            setLive('Audit complete. Your narrative is ready to download.');
+            try {
+              const [findRes, rs, ac, dd] = await Promise.all([
+                fetch(`${API}/findings`).then(r => r.json()),
+                fetch(`${API}/risk-score`).then(r => r.json()),
+                fetch(`${API}/action-checklist`).then(r => r.json()),
+                fetch(`${API}/data-diff`).then(r => r.json()),
+              ]);
+              setFindings(findRes.findings || []); setStats(findRes.stats || null);
+              setRiskScore(rs); setChecklist(ac.checklist || []); setDataDiff(dd);
+            } catch (e) {}
+          } else if (event.status === 'error') {
+            setError(event.message || 'The audit could not be completed.'); setPipelineStatus('error');
+          }
+          return;
+        }
+        setAgentStatuses(prev => ({ ...prev, [event.agent]: event.status }));
+        if (event.status === 'running') { const a = AGENTS.find(x => x.key === event.agent); if (a) setLive(`${a.name}: ${a.desc}.`); }
+        if (event.summary) setAgentSummaries(prev => ({ ...prev, [event.agent]: event.summary }));
+      }
+
+      const downloadNarrative = () => window.open(`${API}/download-narrative`, '_blank');
+      const downloadCorrected = () => window.open(`${API}/download-corrected`, '_blank');
+
+      return (
+        <React.Fragment>
+          <header className="header">
+            <div className="header-inner">
+              <div className="brand">
+                <span className="brand-mark"><Icon name="shield" size={22} /></span>
+                <span className="brand-text">
+                  <span className="logo">AssedGuard AI</span>
+                  <span className="logo-sub">Data Integrity Review</span>
+                </span>
+              </div>
+              <div className="header-right">
+                <span className="badge-audit"><span className="dot" />Regulatory Audit Mode</span>
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              </div>
+            </div>
+          </header>
+
+          <main className="app main" id="main">
+            <div className="sr-only" role="status" aria-live="polite">{live}</div>
+
+            <section className="hero">
+              <span className="eyebrow"><Icon name="shield" size={14} />FDA · ISO 13485 ready</span>
+              <h1>Turn corrupted factory data into a<br /><span className="grad">signed-ready audit narrative</span></h1>
+              <p>Upload your manufacturing dataset. AssedGuard AI finds every data issue, ranks it by
+              audit risk, fixes what it safely can, and prepares the document you hand to your auditor —
+              no engineer required.</p>
+            </section>
+
+            <UploadZone onUpload={handleUpload} onCustomers={setCustomersFile} onError={setError} disabled={pipelineStatus === 'running'} />
+
+            {error && <div className="error-banner" role="alert"><Icon name="triangle" />{error}</div>}
+
+            {pipelineStatus !== 'idle' && (
+              <section className="section">
+                <div className="section-head">
+                  <span className="section-label"><Icon name="activity" />Audit pipeline</span>
+                  <span className="section-meta">{completedCount} of {AGENTS.length} agents complete</span>
+                </div>
+                <div className="pipeline-progress" role="progressbar" aria-valuemin={0} aria-valuemax={AGENTS.length} aria-valuenow={completedCount}>
+                  <span style={{ width: `${(completedCount / AGENTS.length) * 100}%` }} />
+                </div>
+                <div className="agent-grid">
+                  {AGENTS.map((a, i) => (
+                    <AgentCard key={a.key} index={i + 1} agentKey={a.key} name={a.name}
+                      description={a.desc} status={agentStatuses[a.key]} summary={agentSummaries[a.key]} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && riskScore && (
+              <section className="section">
+                <div className="section-head"><span className="section-label"><Icon name="gauge" />Audit risk score</span></div>
+                <RiskGauge data={riskScore} />
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && stats && (
+              <section className="section">
+                <div className="section-head"><span className="section-label"><Icon name="activity" />Audit summary</span></div>
+                <div className="stat-grid">
+                  <div className="stat-card red"><span className="stat-icon"><Icon name="triangle" /></span><span className="stat-num">{sevCount('HIGH')}</span><span className="stat-label">Critical issues</span></div>
+                  <div className="stat-card amber"><span className="stat-icon"><Icon name="alertCircle" /></span><span className="stat-num">{sevCount('MED')}</span><span className="stat-label">Moderate issues</span></div>
+                  <div className="stat-card green"><span className="stat-icon"><Icon name="checkCircle" /></span><span className="stat-num">{autoCorrected}</span><span className="stat-label">Auto-corrected</span></div>
+                  <div className="stat-card gray"><span className="stat-icon"><Icon name="flag" /></span><span className="stat-num">{needsReview}</span><span className="stat-label">Need your review</span></div>
+                </div>
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && checklist && checklist.length > 0 && (
+              <section className="section">
+                <div className="section-head">
+                  <span className="section-label"><Icon name="clipboard" />Pre-audit action plan</span>
+                  <span className="section-meta">Complete all BEFORE AUDIT items before submitting</span>
+                </div>
+                <ActionChecklist items={checklist} />
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && realFindings.length > 0 && (
+              <section className="section">
+                <div className="section-head">
+                  <span className="section-label"><Icon name="table" />Findings — sorted by audit risk</span>
+                  <span className="section-meta">Select a row for full detail</span>
+                </div>
+                <FindingsTable findings={realFindings} />
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && realFindings.length === 0 && (
+              <section className="section">
+                <div className="section-head">
+                  <span className="section-label"><Icon name="table" />Findings</span>
+                </div>
+                <EmptyFindings />
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && dataDiff && dataDiff.changed_rows && dataDiff.changed_rows.length > 0 && (
+              <section className="section">
+                <div className="section-head"><span className="section-label"><Icon name="diff" />Data rescue — before / after</span></div>
+                <DataDiff data={dataDiff} />
+              </section>
+            )}
+
+            {pipelineStatus === 'complete' && (
+              <section className="section">
+                <div className="section-head"><span className="section-label"><Icon name="bot" />Ask your audit AI</span></div>
+                <ChatPanel />
+              </section>
+            )}
+
+            {pdfReady && (
+              <div className="download-card">
+                <div className="dl-left">
+                  <span className="dl-doc"><Icon name="file" size={28} /></span>
+                  <div className="dl-text">
+                    <h3>Your audit narrative is ready</h3>
+                    <p>A plain-English summary for your auditor. Every correction and escalation is logged with a traceable reason.</p>
+                  </div>
+                </div>
+                <div className="dl-actions">
+                  <button className="download-btn" onClick={downloadNarrative}><Icon name="download" />Download narrative PDF</button>
+                  <button className="download-secondary" onClick={downloadCorrected}><Icon name="table" size={16} />Download corrected dataset</button>
+                </div>
+              </div>
+            )}
+
+            <footer className="footer">
+              <span className="lock"><Icon name="lock" />Confidential audit document · processed locally</span>
+              <span>AssedGuard AI · Track 01 — Data Rescue</span>
+            </footer>
+          </main>
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+
+# Node / tooling
+node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local agent / harness state
+.claude/
+tasks/lessons.md
+
+# Generated / temp artifacts
+*.log
+frontend/_*.png
+frontend/_*.mjs
+data/_*.csv
+**/audit_narrative.pdf
